@@ -46,16 +46,35 @@ export function ControlPanel({
         <Slider
           value={[blockSize]}
           onValueChange={([v]) => onBlockSizeChange(v)}
-          min={4}
+          min={1}
           max={64}
-          step={4}
+          step={1}
           disabled={isProcessing}
           className="[&_[role=slider]]:border-accent [&_[role=slider]]:bg-accent [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[data-disabled]]:opacity-50"
         />
         <div className="flex justify-between text-[10px] font-mono text-muted-foreground/60">
-          <span>精细 4px</span>
+          <span>像素级 1px</span>
           <span>粗糙 64px</span>
         </div>
+        <button
+          onClick={() => onBlockSizeChange(blockSize === 1 ? 8 : 1)}
+          disabled={isProcessing}
+          className={`
+            w-full py-1.5 text-[10px] font-mono rounded-sm border transition-all
+            ${blockSize === 1
+              ? 'border-accent bg-accent/10 text-accent'
+              : 'border-border text-muted-foreground hover:border-muted-foreground/40'
+            }
+            ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}
+          `}
+        >
+          {blockSize === 1 ? '✓ 像素级精度（原分辨率）' : '切换至像素级精度'}
+        </button>
+        {blockSize === 1 && (
+          <p className="text-[9px] font-mono text-amber-500/70">
+            图片3 将维持图片2 的原分辨率，处理大图时可能较慢
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">

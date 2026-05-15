@@ -75,6 +75,7 @@ export function extractPalette(
 ): RGB[] {
   const { ctx } = drawImageToCanvas(img1.img, img1.width, img1.height);
   const imageData = ctx.getImageData(0, 0, img1.width, img1.height);
+  const seen = new Set<string>();
   const palette: RGB[] = [];
 
   for (let y = 0; y < img1.height; y += blockSize) {
@@ -87,7 +88,11 @@ export function extractPalette(
         img1.width,
         img1.height
       );
-      palette.push(avgColor);
+      const key = `${avgColor.r},${avgColor.g},${avgColor.b}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        palette.push(avgColor);
+      }
     }
   }
 
@@ -111,6 +116,8 @@ export function generateMosaic(
       ? findNearestColorWeighted
       : findNearestColor;
 
+  const colorCache = new Map<string, RGB>();
+
   for (let y = 0; y < img2.height; y += config.blockSize) {
     for (let x = 0; x < img2.width; x += config.blockSize) {
       const avgColor = getBlockAverageColor(
@@ -121,7 +128,12 @@ export function generateMosaic(
         img2.width,
         img2.height
       );
-      const nearest = matchFn(avgColor, palette);
+      const cacheKey = `${avgColor.r},${avgColor.g},${avgColor.b}`;
+      let nearest = colorCache.get(cacheKey);
+      if (!nearest) {
+        nearest = matchFn(avgColor, palette);
+        colorCache.set(cacheKey, nearest);
+      }
       fillBlock(
         imageData,
         x,
