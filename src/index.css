@@ -1,0 +1,94 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 8% 4%;
+    --foreground: 0 0% 95%;
+    --card: 240 8% 6%;
+    --card-foreground: 0 0% 95%;
+    --popover: 240 8% 6%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 38 100% 50%;
+    --primary-foreground: 240 8% 4%;
+    --secondary: 240 6% 12%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 240 6% 10%;
+    --muted-foreground: 240 4% 55%;
+    --accent: 38 100% 50%;
+    --accent-foreground: 240 8% 4%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 6% 18%;
+    --input: 240 6% 16%;
+    --ring: 38 100% 50%;
+    --radius: 0.25rem;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  .dark {
+    --background: 240 8% 4%;
+    --foreground: 0 0% 95%;
+    --card: 240 8% 6%;
+    --card-foreground: 0 0% 95%;
+    --popover: 240 8% 6%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 38 100% 50%;
+    --primary-foreground: 240 8% 4%;
+    --secondary: 240 6% 12%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 240 6% 10%;
+    --muted-foreground: 240 4% 55%;
+    --accent: 38 100% 50%;
+    --accent-foreground: 240 8% 4%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 6% 18%;
+    --input: 240 6% 16%;
+    --ring: 38 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-mono);
+    letter-spacing: -0.02em;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 3px;
+}
+
+.bg-grid {
+  background-image:
+    linear-gradient(hsl(var(--border) / 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--border) / 0.3) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.bg-noise::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
