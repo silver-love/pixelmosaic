@@ -1,11 +1,11 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { Clock } from 'lucide-react'
 import { ImageUploader } from './components/ImageUploader'
 import { ControlPanel } from './components/ControlPanel'
 import { ResultPanel } from './components/ResultPanel'
 import { AnimationOverlay } from './components/AnimationOverlay'
 import { HistoryPanel } from './components/HistoryPanel'
-import { extractPalette, generateMosaic } from './lib/mosaic-engine'
+import { extractPalette, getImagePixelData } from './lib/mosaic-engine'
 import type { LoadedImage } from './lib/image-utils'
 import type { RGB } from './lib/color-utils'
 
@@ -78,6 +78,8 @@ function App() {
   const [showHistory, setShowHistory] = useState(false)
   const [animationPhase, setAnimationPhase] = useState<AnimationPhase>('idle')
   const [palette, setPalette] = useState<RGB[]>([])
+  const [mosaicProgress, setMosaicProgress] = useState(0)
+  const workerRef = useRef<Worker | null>(null)
 
   const canTransform = loadedImage1 !== null && loadedImage2 !== null
 
@@ -123,20 +125,34 @@ function App() {
   const handleAnimationComplete = useCallback(() => {
     if (!loadedImage2) return
 
-    // Generate the mosaic result
-    // Use a small delay to let the animation overlay unmount first
-    setTimeout(() => {
-      try {
-        const mosaicResult = generateMosaic(loadedImage2, palette, {
-          blockSize,
-          matchMode,
-        })
+    setMosaicProgress(0)
 
+    const pixelData = getImagePixelData(loadedImage2)
+
+    const worker = new Worker(
+      new URL('./workers/mosaic.worker.ts', import.meta.url),
+      { type: 'module' }
+    )
+    workerRef.current = worker
+
+    worker.onmessage = (e: MessageEvent) => {
+      const msg = e.data as { type: string; percent?: number; dataUrl?: string; message?: string }
+
+      if (msg.type === 'progress') {
+        setMosaicProgress(msg.percent ?? 0)
+      } else if (msg.type === 'complete') {
+        const mosaicResult = {
+          dataUrl: msg.dataUrl!,
+          width: loadedImage2.width,
+          height: loadedImage2.height,
+        }
         setResult(mosaicResult)
         setIsProcessing(false)
         setAnimationPhase('done')
+        setMosaicProgress(100)
+        worker.terminate()
+        workerRef.current = null
 
-        // Save to history
         generateThumbnail(mosaicResult.dataUrl).then((thumbnail) => {
           const entry: HistoryEntry = {
             id: generateId(),
@@ -152,12 +168,25 @@ function App() {
           }
           saveToHistory(entry)
         })
-      } catch (err) {
-        console.error('Mosaic generation failed:', err)
+      } else if (msg.type === 'error') {
+        console.error('Worker error:', msg.message)
         setIsProcessing(false)
         setAnimationPhase('idle')
+        setMosaicProgress(0)
+        worker.terminate()
+        workerRef.current = null
       }
-    }, 50)
+    }
+
+    worker.postMessage({
+      type: 'generate',
+      img2Buffer: pixelData.buffer,
+      width: pixelData.width,
+      height: pixelData.height,
+      palette,
+      blockSize,
+      matchMode,
+    })
   }, [loadedImage2, palette, blockSize, matchMode, image1, image2])
 
   const handleReset = useCallback(() => {
@@ -285,12 +314,14 @@ function App() {
               onOutputFormatChange={setOutputFormat}
               canTransform={canTransform}
               isProcessing={isProcessing}
+              progress={mosaicProgress}
               onTransform={handleTransform}
             />
             <ResultPanel
               result={result}
               outputFormat={outputFormat}
               isProcessing={isProcessing}
+              progress={mosaicProgress}
               onReset={handleReset}
             />
           </div>

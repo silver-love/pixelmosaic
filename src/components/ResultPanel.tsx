@@ -6,10 +6,11 @@ type ResultPanelProps = {
   result: { dataUrl: string; width: number; height: number } | null
   outputFormat: 'image/png' | 'image/jpeg' | 'image/webp'
   isProcessing: boolean
+  progress: number
   onReset: () => void
 }
 
-export function ResultPanel({ result, outputFormat, isProcessing, onReset }: ResultPanelProps) {
+export function ResultPanel({ result, outputFormat, isProcessing, progress, onReset }: ResultPanelProps) {
   const [zoomLevel, setZoomLevel] = useState(1)
 
   const handleDownload = useCallback(() => {
@@ -72,6 +73,19 @@ export function ResultPanel({ result, outputFormat, isProcessing, onReset }: Res
         <p className="text-xs font-mono text-accent animate-pulse">
           正在生成马赛克...
         </p>
+        {progress > 0 && (
+          <div className="w-full max-w-[240px] space-y-1.5">
+            <div className="h-1.5 bg-secondary rounded-sm overflow-hidden">
+              <div
+                className="h-full bg-accent rounded-sm transition-all duration-300 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <p className="text-[10px] font-mono text-muted-foreground text-center tabular-nums">
+              {progress}%
+            </p>
+          </div>
+        )}
       </div>
     )
   }

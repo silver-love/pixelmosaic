@@ -98,3 +98,65 @@ export function findNearestColorWeighted(target: RGB, palette: RGB[]): RGB {
 
   return best;
 }
+
+const LUT_SIZE = 32;
+const LUT_STEP = 256 / LUT_SIZE;
+
+function sqDist(a: RGB, b: RGB): number {
+  const dr = a.r - b.r;
+  const dg = a.g - b.g;
+  const db = a.b - b.b;
+  return dr * dr + dg * dg + db * db;
+}
+
+function sqDistWeighted(a: RGB, b: RGB): number {
+  const dr = a.r - b.r;
+  const dg = a.g - b.g;
+  const db = a.b - b.b;
+  return 2 * dr * dr + 4 * dg * dg + 3 * db * db;
+}
+
+export function buildColorLUT(
+  palette: RGB[],
+  matchMode: 'nearest' | 'weighted'
+): Uint8Array {
+  const distFn = matchMode === 'weighted' ? sqDistWeighted : sqDist;
+  const lut = new Uint8Array(LUT_SIZE * LUT_SIZE * LUT_SIZE * 3);
+
+  for (let ri = 0; ri < LUT_SIZE; ri++) {
+    for (let gi = 0; gi < LUT_SIZE; gi++) {
+      for (let bi = 0; bi < LUT_SIZE; bi++) {
+        const target: RGB = {
+          r: Math.round(ri * LUT_STEP + LUT_STEP / 2),
+          g: Math.round(gi * LUT_STEP + LUT_STEP / 2),
+          b: Math.round(bi * LUT_STEP + LUT_STEP / 2),
+        };
+
+        let best = palette[0];
+        let bestDist = distFn(target, best);
+        for (let i = 1; i < palette.length; i++) {
+          const d = distFn(target, palette[i]);
+          if (d < bestDist) {
+            bestDist = d;
+            best = palette[i];
+          }
+        }
+
+        const base = (ri * LUT_SIZE * LUT_SIZE + gi * LUT_SIZE + bi) * 3;
+        lut[base] = best.r;
+        lut[base + 1] = best.g;
+        lut[base + 2] = best.b;
+      }
+    }
+  }
+
+  return lut;
+}
+
+export function lookupLUT(lut: Uint8Array, r: number, g: number, b: number): RGB {
+  const ri = Math.min(Math.floor(r / LUT_STEP), LUT_SIZE - 1);
+  const gi = Math.min(Math.floor(g / LUT_STEP), LUT_SIZE - 1);
+  const bi = Math.min(Math.floor(b / LUT_STEP), LUT_SIZE - 1);
+  const base = (ri * LUT_SIZE * LUT_SIZE + gi * LUT_SIZE + bi) * 3;
+  return { r: lut[base], g: lut[base + 1], b: lut[base + 2] };
+}

@@ -11,6 +11,7 @@ type ControlPanelProps = {
   onOutputFormatChange: (format: 'image/png' | 'image/jpeg' | 'image/webp') => void
   canTransform: boolean
   isProcessing: boolean
+  progress: number
   onTransform: () => void
 }
 
@@ -23,6 +24,7 @@ export function ControlPanel({
   onOutputFormatChange,
   canTransform,
   isProcessing,
+  progress,
   onTransform,
 }: ControlPanelProps) {
   return (
@@ -158,6 +160,21 @@ export function ControlPanel({
           </>
         )}
       </Button>
+
+      {isProcessing && progress > 0 && (
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-[10px] font-mono">
+            <span className="text-muted-foreground">生成进度</span>
+            <span className="text-accent tabular-nums">{progress}%</span>
+          </div>
+          <div className="h-1.5 bg-secondary rounded-sm overflow-hidden">
+            <div
+              className="h-full bg-accent rounded-sm transition-all duration-300 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {!canTransform && !isProcessing && (
         <p className="text-[10px] font-mono text-muted-foreground/60 text-center">

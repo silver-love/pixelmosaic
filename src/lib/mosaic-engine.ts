@@ -324,3 +324,17 @@ export function downloadImage(dataUrl: string, filename: string): void {
   anchor.click();
   document.body.removeChild(anchor);
 }
+
+export function getImagePixelData(img: LoadedImage): {
+  buffer: ArrayBuffer;
+  width: number;
+  height: number;
+} {
+  const { ctx } = drawImageToCanvas(img.img, img.width, img.height);
+  const imageData = ctx.getImageData(0, 0, img.width, img.height);
+  return {
+    buffer: imageData.data.buffer.slice(0),
+    width: img.width,
+    height: img.height,
+  };
+}

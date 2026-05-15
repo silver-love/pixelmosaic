@@ -1,27 +1,62 @@
 import type { RGB } from '../lib/color-utils';
-import type { MosaicConfig } from '../lib/mosaic-engine';
-import {
-  getBlockAverageColor,
-  findNearestColor,
-  findNearestColorWeighted,
-} from '../lib/color-utils';
+import { buildColorLUT, lookupLUT } from '../lib/color-utils';
 
-type WorkerMessage = {
+type GenerateMessage = {
   type: 'generate';
-  img2ImageData: ImageData;
-  palette: RGB[];
-  config: MosaicConfig;
+  img2Buffer: ArrayBuffer;
   width: number;
   height: number;
+  palette: RGB[];
+  blockSize: number;
+  matchMode: 'nearest' | 'weighted';
 };
 
-type WorkerResponse = {
+type ProgressResponse = {
+  type: 'progress';
+  percent: number;
+};
+
+type CompleteResponse = {
   type: 'complete';
   dataUrl: string;
 };
 
+type ErrorResponse = {
+  type: 'error';
+  message: string;
+};
+
+function getBlockAverage(
+  data: Uint8ClampedArray,
+  startX: number,
+  startY: number,
+  blockSize: number,
+  imgWidth: number,
+  imgHeight: number
+): RGB {
+  const endX = Math.min(startX + blockSize, imgWidth);
+  const endY = Math.min(startY + blockSize, imgHeight);
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let count = 0;
+
+  for (let y = startY; y < endY; y++) {
+    for (let x = startX; x < endX; x++) {
+      const idx = (y * imgWidth + x) * 4;
+      r += data[idx];
+      g += data[idx + 1];
+      b += data[idx + 2];
+      count++;
+    }
+  }
+
+  if (count === 0) return { r: 0, g: 0, b: 0 };
+  return { r: Math.round(r / count), g: Math.round(g / count), b: Math.round(b / count) };
+}
+
 function fillBlock(
-  imageData: ImageData,
+  data: Uint8ClampedArray,
   startX: number,
   startY: number,
   blockSize: number,
@@ -31,13 +66,12 @@ function fillBlock(
 ): void {
   const endX = Math.min(startX + blockSize, imgWidth);
   const endY = Math.min(startY + blockSize, imgHeight);
-
   for (let y = startY; y < endY; y++) {
     for (let x = startX; x < endX; x++) {
-      const index = (y * imgWidth + x) * 4;
-      imageData.data[index] = color.r;
-      imageData.data[index + 1] = color.g;
-      imageData.data[index + 2] = color.b;
+      const idx = (y * imgWidth + x) * 4;
+      data[idx] = color.r;
+      data[idx + 1] = color.g;
+      data[idx + 2] = color.b;
     }
   }
 }
@@ -51,71 +85,61 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-async function generateMosaicInWorker(
-  img2ImageData: ImageData,
-  palette: RGB[],
-  config: MosaicConfig,
+async function generateMosaic(
+  img2Buffer: ArrayBuffer,
   width: number,
-  height: number
+  height: number,
+  palette: RGB[],
+  blockSize: number,
+  matchMode: 'nearest' | 'weighted'
 ): Promise<string> {
   const canvas = new OffscreenCanvas(width, height);
   const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    throw new Error('Failed to get 2D context in worker');
-  }
+  if (!ctx) throw new Error('Failed to get 2D context');
 
-  ctx.putImageData(img2ImageData, 0, 0);
+  const imgData = new ImageData(new Uint8ClampedArray(img2Buffer), width, height);
+  ctx.putImageData(imgData, 0, 0);
   const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
 
-  const matchFn =
-    config.matchMode === 'weighted'
-      ? findNearestColorWeighted
-      : findNearestColor;
+  const lut = buildColorLUT(palette, matchMode);
 
-  for (let y = 0; y < height; y += config.blockSize) {
-    for (let x = 0; x < width; x += config.blockSize) {
-      const avgColor = getBlockAverageColor(
-        imageData,
-        x,
-        y,
-        config.blockSize,
-        width,
-        height
-      );
-      const nearest = matchFn(avgColor, palette);
-      fillBlock(imageData, x, y, config.blockSize, nearest, width, height);
+  const totalRows = Math.ceil(height / blockSize);
+  let lastReportPercent = 0;
+
+  for (let y = 0; y < height; y += blockSize) {
+    for (let x = 0; x < width; x += blockSize) {
+      const avgColor = getBlockAverage(data, x, y, blockSize, width, height);
+      const nearest = lookupLUT(lut, avgColor.r, avgColor.g, avgColor.b);
+      fillBlock(data, x, y, blockSize, nearest, width, height);
+    }
+
+    const rowIndex = Math.floor(y / blockSize) + 1;
+    const percent = Math.round((rowIndex / totalRows) * 100);
+    if (percent - lastReportPercent >= 5 || percent === 100) {
+      lastReportPercent = percent;
+      self.postMessage({ type: 'progress', percent } satisfies ProgressResponse);
     }
   }
 
   ctx.putImageData(imageData, 0, 0);
-
   const blob = await canvas.convertToBlob({ type: 'image/png' });
-  const dataUrl = await blobToDataUrl(blob);
-  return dataUrl;
+  return blobToDataUrl(blob);
 }
 
-self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
-  const { type, img2ImageData, palette, config, width, height } = e.data;
-
-  if (type !== 'generate') {
-    return;
-  }
+self.onmessage = async (e: MessageEvent<GenerateMessage>) => {
+  const { type, img2Buffer, width, height, palette, blockSize, matchMode } = e.data;
+  if (type !== 'generate') return;
 
   try {
-    const dataUrl = await generateMosaicInWorker(
-      img2ImageData,
-      palette,
-      config,
-      width,
-      height
+    const dataUrl = await generateMosaic(
+      img2Buffer, width, height, palette, blockSize, matchMode
     );
-
-    const response: WorkerResponse = { type: 'complete', dataUrl };
-    self.postMessage(response);
-  } catch (error) {
+    self.postMessage({ type: 'complete', dataUrl } satisfies CompleteResponse);
+  } catch (err) {
     self.postMessage({
       type: 'error',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    });
+      message: err instanceof Error ? err.message : 'Unknown error',
+    } satisfies ErrorResponse);
   }
 };
